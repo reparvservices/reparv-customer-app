@@ -72,6 +72,12 @@ import {getImageUri, parseFrontView} from '../utils/imageHandle';
 import PlotAvailabilityModal from './PlotAvailability';
 import Geolocation from '@react-native-community/geolocation';
 
+// Listings store 'NA' / 'null' / 'No' when there is no RERA number
+const hasReraNumber = value =>
+  !['', 'null', 'undefined', 'na', 'n/a', 'no', 'none', '-'].includes(
+    String(value ?? '').trim().toLowerCase(),
+  );
+
 const {width} = Dimensions.get('window');
 const isTablet = width >= 768;
 const TABS = ['Highlights', 'Overview', 'Amenities', 'About', 'Location'];
@@ -516,7 +522,7 @@ const SimilerPropertyDetailsScreen = () => {
             },
           );
           if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            console.log('Location permission denied');
+            setUserDistance('unavailable');
             return;
           }
         }
@@ -537,11 +543,11 @@ const SimilerPropertyDetailsScreen = () => {
                 : `${dist.toFixed(1)} km`,
             );
           },
-          err => console.log('Geolocation error:', err),
+          () => setUserDistance('unavailable'),
           {enableHighAccuracy: false, timeout: 5000, maximumAge: 300000},
         );
-      } catch (e) {
-        console.log('Location permission error:', e);
+      } catch {
+        setUserDistance('unavailable');
       }
     };
 
@@ -1024,12 +1030,14 @@ const SimilerPropertyDetailsScreen = () => {
             </View>
 
             {/* Project By */}
-            <Text style={cardStyles.projectByText}>
-              Project by{' '}
-              <Text style={cardStyles.projectByName}>
-                {propertyData?.projectBy}
+            {!!propertyData?.projectBy?.trim() && (
+              <Text style={cardStyles.projectByText}>
+                Project by{' '}
+                <Text style={cardStyles.projectByName}>
+                  {propertyData?.projectBy}
+                </Text>
               </Text>
-            </Text>
+            )}
 
             {/* Available / Booked Pills */}
             {(propertyData?.availableCount > 0 ||
@@ -1204,11 +1212,16 @@ const SimilerPropertyDetailsScreen = () => {
                 <X size={13} color="#9CA3AF" strokeWidth={2.5} />
                 <Text style={cardStyles.trustText}>No Hidden{'\n'}Charges</Text>
               </View>
-              <View style={cardStyles.trustDivider} />
-              <View style={cardStyles.trustItem}>
-                <Building2 size={13} color="#9CA3AF" />
-                <Text style={cardStyles.trustText}>RERA{'\n'}Registered</Text>
-              </View>
+              {/* Only claim RERA when the listing has a RERA number */}
+              {hasReraNumber(propertyData?.reraRegistered) && (
+                <>
+                  <View style={cardStyles.trustDivider} />
+                  <View style={cardStyles.trustItem}>
+                    <Building2 size={13} color="#9CA3AF" />
+                    <Text style={cardStyles.trustText}>RERA{'\n'}Registered</Text>
+                  </View>
+                </>
+              )}
             </View>
 
             {/* CTA Buttons */}

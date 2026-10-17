@@ -17,6 +17,7 @@ import {
 import {WebView} from 'react-native-webview';
 import Slider from '@react-native-community/slider';
 import {getImageUri} from '../utils/imageHandle';
+import {formatDistance, useUserLocation} from '../hooks/userLocation';
 import {
   ArrowLeft,
   Filter,
@@ -101,14 +102,30 @@ function prettifyCategory(cat) {
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2');
 }
 
+// A wrapped map pick can store e.g. longitude 439.07 — never plot those
+const isValidCoord = (lat, lon) =>
+  Number.isFinite(lat) &&
+  Number.isFinite(lon) &&
+  lat !== 0 &&
+  lon !== 0 &&
+  Math.abs(lat) <= 90 &&
+  Math.abs(lon) <= 180;
+
+const median = values => {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
 function computeCityBounds(cityProps) {
   const coords = cityProps
     .map(p => ({lat: parseFloat(p.latitude), lon: parseFloat(p.longitude)}))
-    .filter(c => c.lat && c.lon);
+    .filter(c => isValidCoord(c.lat, c.lon));
   if (!coords.length) return null;
 
-  const centLat = coords.reduce((s, c) => s + c.lat, 0) / coords.length;
-  const centLon = coords.reduce((s, c) => s + c.lon, 0) / coords.length;
+  // Median, not mean: one mistyped location must not pull the map off the city
+  const centLat = median(coords.map(c => c.lat));
+  const centLon = median(coords.map(c => c.lon));
 
   let maxDist = 0;
   coords.forEach(c => {
@@ -1171,6 +1188,15 @@ const EmptyState = ({hasFilters, onReset, noCity, onPickCity}) => {
 
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 export default function CityPropertyMapScreen({navigation}) {
+  // Distance chip on the property card (null until location is available)
+  const {coords: userLocation} = useUserLocation();
+  const userCoords = useMemo(
+    () =>
+      userLocation
+        ? {lat: userLocation.latitude, lon: userLocation.longitude}
+        : null,
+    [userLocation],
+  );
   const webViewRef = useRef(null);
 
   const [status, setStatus] = useState('loading');
@@ -1282,7 +1308,7 @@ export default function CityPropertyMapScreen({navigation}) {
         lon: parseFloat(p.longitude),
         price: p.totalOfferPrice || p.totalSalesPrice,
       }))
-      .filter(m => m.lat && m.lon);
+      .filter(m => isValidCoord(m.lat, m.lon));
 
     const payload = JSON.stringify({
       centerCoords: {lat: cityBounds.lat, lon: cityBounds.lon},
@@ -1610,6 +1636,7 @@ export default function CityPropertyMapScreen({navigation}) {
             property={selectedProperty}
             onClose={() => setSelectedProperty(null)}
             navigation={navigation}
+            userCoords={userCoords}
           />
         )}
 

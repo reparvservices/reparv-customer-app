@@ -1,4 +1,4 @@
-import React, {use, useState} from 'react';
+import React, {useState} from 'react';
 import {API_BASE_URL} from '../../config/api';
 import {
   View,
@@ -17,11 +17,6 @@ const ContactUs = ({visible, onClose}) => {
 
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
-
-  const handleSelect = item => {
-    setSelectedIssue(item);
-    setOpenDropdown(false);
-  };
 
   const handleSubmit = async () => {
     if (!description) {

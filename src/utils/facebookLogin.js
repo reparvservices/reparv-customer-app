@@ -34,7 +34,6 @@ export const facebookLogin = async () => {
     );
 
     const user = userCredential.user;
-    console.log(user);
 
     // 🔥 Return ONLY required fields (backend-friendly)
     return {

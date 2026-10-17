@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import {useDispatch, useSelector} from 'react-redux';
-import {MapPin, ChevronDown, Search} from 'lucide-react-native';
+import {MapPin, ChevronDown, Search, User} from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from '@react-native-community/geolocation'; //  ADDED
 import {getImageUri} from '../../utils/imageHandle';
@@ -362,7 +362,13 @@ export default function HomeHeader() {
           onPress={() => navigation.navigate('Profile')}
           activeOpacity={0.85}
           style={styles.avatarOuter}>
-          <Image source={{uri: getImageUri(userimage)}} style={styles.avatar} />
+          {userimage ? (
+            <Image source={{uri: getImageUri(userimage)}} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <User size={rs(22)} color="#8A38F5" strokeWidth={2} />
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -466,6 +472,11 @@ function makeStyles() {
       width: avatarSize,
       height: avatarSize,
       borderRadius: avatarSize / 2,
+    },
+    avatarFallback: {
+      backgroundColor: '#F3ECFE',
+      alignItems: 'center',
+      justifyContent: 'center',
     },
     searchShell: {
       flexDirection: 'row',

@@ -114,10 +114,9 @@ function PropertyCard({item, iswishList}) {
   const fetchLikeCount = async () => {
     try {
       const res = await fetch(
-        `${API_BASE_URL}/customerapp/property/likes/count/${item.propertyid}`,
+        `${API_BASE_URL}/customerapp/property/likes/${item.propertyid}`,
       );
       const data = await res.json();
-      console.log(data, 'ddddsss');
 
       setLikeCount(data?.likeCount || 0);
     } catch {

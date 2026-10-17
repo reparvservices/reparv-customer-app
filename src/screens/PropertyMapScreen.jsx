@@ -1436,7 +1436,14 @@ export default function PropertyMapScreen({navigation}) {
         price: p.totalOfferPrice || p.totalSalesPrice,
         selected: selectedProperty?.propertyid === p.propertyid,
       }))
-      .filter(m => m.lat && m.lon);
+      // Skip missing or out-of-range coords (e.g. a wrapped longitude 439.07)
+      .filter(
+        m =>
+          m.lat &&
+          m.lon &&
+          Math.abs(m.lat) <= 90 &&
+          Math.abs(m.lon) <= 180,
+      );
     const payload = JSON.stringify({userCoords, markers, radiusKm});
     if (mapUpdateTimer.current) clearTimeout(mapUpdateTimer.current);
     mapUpdateTimer.current = setTimeout(() => {

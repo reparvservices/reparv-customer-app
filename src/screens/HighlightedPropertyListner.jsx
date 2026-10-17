@@ -428,8 +428,28 @@ const HighlightedPropertyListScreen = () => {
                     setFilterRadius(5);
                     setAmenities([]);
 
-                    // Reload flats
-                    fetchFlats();
+                    // Show the list again with only tab / city / search applied
+                    // (state setters above apply on the next render)
+                    const query = searchText?.toLowerCase();
+                    const resetList = flats.filter(
+                      item =>
+                        (!selectedTab ||
+                          item.propertyCategory === selectedTab) &&
+                        (!selectedCity || item.city === selectedCity) &&
+                        (!query ||
+                          [
+                            item.city,
+                            item.location,
+                            item.projectBy,
+                            item.propertyName,
+                          ]
+                            .filter(Boolean)
+                            .some(field =>
+                              field.toLowerCase().includes(query),
+                            )),
+                    );
+                    setFilteredFlats(resetList);
+                    setResultCount(resetList.length);
 
                     // Close modal
                     setFilterVisible(false);
