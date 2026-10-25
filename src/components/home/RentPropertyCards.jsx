@@ -409,7 +409,9 @@ export default function RentPropertyCards() {
         <SectionHeader />
         <EmptyState
           onPopularAreas={() => navigation.navigate('LocationPickerScreen')}
-          onExpandRadius={() => navigation.navigate('RentProperty')}
+          onExpandRadius={() =>
+            navigation.navigate('PropertyListScreen', {listingGroup: 'rent'})
+          }
         />
       </View>
     );
@@ -570,7 +572,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   imageContainer: {height: 130, backgroundColor: '#F3F3F3'},
-  image: {width: '100%', height: '100%', resizeMode: 'contain'},
+  image: {width: '100%', height: '100%', resizeMode: 'cover'},
 
   // Top-left: REPARV Assured
   leftBadge: {

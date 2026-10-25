@@ -88,7 +88,9 @@ export default function PlotAvailabilityModal({
   const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const isPlotCategory = propertyCategory === 'NewPlot';
+  const isPlotCategory = ['NewPlot', 'CommercialPlot', 'RentalPlot'].includes(
+    propertyCategory,
+  );
   const unitLabel = isPlotCategory ? 'Plot' : 'Flat';
 
   const getGroupKey = item => item.khasrano || item.wing;

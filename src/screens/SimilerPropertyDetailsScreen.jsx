@@ -18,8 +18,6 @@ import {
   Modal,
   Animated,
   Easing,
-  PermissionsAndroid,
-  Platform,
 } from 'react-native';
 import {Highlights} from '../components/PropertyDetails/Highlights';
 import {Overview} from '../components/PropertyDetails/Overview';
@@ -70,7 +68,7 @@ import PropertyVideoModal from '../components/PropertyDetails/VideoModel';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {getImageUri, parseFrontView} from '../utils/imageHandle';
 import PlotAvailabilityModal from './PlotAvailability';
-import Geolocation from '@react-native-community/geolocation';
+import {formatDistance, useUserLocation} from '../hooks/userLocation';
 
 // Listings store 'NA' / 'null' / 'No' when there is no RERA number
 const hasReraNumber = value =>
@@ -411,7 +409,6 @@ const SimilerPropertyDetailsScreen = () => {
   const [zoomIndex, setZoomIndex] = useState(0);
 
   // ── User distance from property ───────────────────────────────────────────
-  const [userDistance, setUserDistance] = useState(null);
 
   const mainImageRef = useRef(null);
   const cardScrollRef = useRef(null);
@@ -496,63 +493,22 @@ const SimilerPropertyDetailsScreen = () => {
     fetchPlotData();
   }, [propertyData?.propertyid]);
 
-  // ── Get user location & compute distance from property ───────────────────
-  useEffect(() => {
-    // Property not fetched yet — wait
-    if (!propertyData) return;
-
-    // Property loaded but coords are missing — mark as unavailable immediately
+  // ── Live distance from user to property ───────────────────────────────────
+  const {coords: userCoords, loading: userLocationLoading} = useUserLocation();
+  let userDistance = null; // null = still locating
+  if (propertyData) {
+    const propLat = parseFloat(propertyData.latitude);
+    const propLon = parseFloat(propertyData.longitude);
     if (!propertyData.latitude || !propertyData.longitude) {
-      setUserDistance('unavailable');
-      return;
+      userDistance = 'unavailable';
+    } else if (userCoords) {
+      userDistance = formatDistance(
+        haversineKm(userCoords.latitude, userCoords.longitude, propLat, propLon),
+      );
+    } else if (!userLocationLoading) {
+      userDistance = 'unavailable';
     }
-
-    const fetchDistance = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message:
-                'Allow Reparv to access your location to show distance from this property.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            },
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            setUserDistance('unavailable');
-            return;
-          }
-        }
-
-        Geolocation.getCurrentPosition(
-          position => {
-            const {latitude, longitude} = position.coords;
-            const dist = haversineKm(
-              latitude,
-              longitude,
-              parseFloat(propertyData.latitude),
-              parseFloat(propertyData.longitude),
-            );
-            // Show metres if < 1 km, else km rounded to 1 decimal
-            setUserDistance(
-              dist < 1
-                ? `${Math.round(dist * 1000)} m`
-                : `${dist.toFixed(1)} km`,
-            );
-          },
-          () => setUserDistance('unavailable'),
-          {enableHighAccuracy: false, timeout: 5000, maximumAge: 300000},
-        );
-      } catch {
-        setUserDistance('unavailable');
-      }
-    };
-
-    fetchDistance();
-  }, [propertyData?.latitude, propertyData?.longitude]);
+  }
 
   // ── Derived data ──────────────────────────────────────────────────────────
   const allHeroImages = ALL_CATEGORY_KEYS.flatMap(key =>

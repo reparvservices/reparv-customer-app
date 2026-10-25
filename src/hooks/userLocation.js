@@ -1,65 +1,20 @@
 // hooks/useUserLocation.js
-import {useEffect, useState} from 'react';
-import {Platform, PermissionsAndroid} from 'react-native';
-import Geolocation from '@react-native-community/geolocation';
+import {useSyncExternalStore} from 'react';
+import {
+  getLiveLocation,
+  subscribeLiveLocation,
+} from '../services/liveLocation';
 
 /**
- * Returns { coords: { latitude, longitude } | null, loading: bool }
- * Requests location permission on Android automatically.
+ * Returns { coords: { latitude, longitude, accuracy } | null, loading: bool }
+ * Live — re-renders as the user moves. Tracking is started once in App.jsx.
  */
 export const useUserLocation = () => {
-  const [coords, setCoords] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const fetch = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message: 'Allow Reparv to access your location.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            },
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            if (!cancelled) setLoading(false);
-            return;
-          }
-        }
-
-        Geolocation.getCurrentPosition(
-          position => {
-            if (!cancelled) {
-              setCoords({
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude,
-              });
-              setLoading(false);
-            }
-          },
-          () => {
-            if (!cancelled) setLoading(false);
-          },
-          {enableHighAccuracy: false, timeout: 6000, maximumAge: 300000},
-        );
-      } catch {
-        if (!cancelled) setLoading(false);
-      }
-    };
-
-    fetch();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  return {coords, loading};
+  const {coords, status} = useSyncExternalStore(
+    subscribeLiveLocation,
+    getLiveLocation,
+  );
+  return {coords, loading: status === 'idle' || status === 'loading'};
 };
 
 /**

@@ -33,12 +33,10 @@ import {
   ChevronRight,
   AlertCircle,
 } from 'lucide-react-native';
-import Geolocation from '@react-native-community/geolocation';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
-  persistGuestLocation,
-  setUserLocation,
-} from '../../features/auth/authSlice';
+  resumeLiveLocation,
+  saveBrowseLocation,
+} from '../../services/liveLocation';
 import {SafeAreaView} from 'react-native-safe-area-context';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,29 +86,6 @@ async function requestAndroidPermission() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// 3-step GPS fallback: high accuracy → low accuracy → cached
-// ─────────────────────────────────────────────────────────────────────────────
-function getLocationRobust() {
-  return new Promise((resolve, reject) => {
-    Geolocation.getCurrentPosition(
-      p => resolve({lat: p.coords.latitude, lon: p.coords.longitude}),
-      () =>
-        Geolocation.getCurrentPosition(
-          p => resolve({lat: p.coords.latitude, lon: p.coords.longitude}),
-          () =>
-            Geolocation.getCurrentPosition(
-              p => resolve({lat: p.coords.latitude, lon: p.coords.longitude}),
-              err => reject(err),
-              {enableHighAccuracy: false, timeout: 10000, maximumAge: 300000},
-            ),
-          {enableHighAccuracy: false, timeout: 10000, maximumAge: 0},
-        ),
-      {enableHighAccuracy: true, timeout: 10000, maximumAge: 0},
-    );
-  });
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Error message helper
 // ─────────────────────────────────────────────────────────────────────────────
 function locationErrMsg(code) {
@@ -118,24 +93,6 @@ function locationErrMsg(code) {
   if (code === 2) return 'GPS unavailable. Make sure Location is ON.';
   if (code === 3) return 'Timed out. Move to open area and retry.';
   return 'Could not get location. Please try again.';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Reverse geocode  —  BigDataCloud (free, no key, India-optimised)
-// ─────────────────────────────────────────────────────────────────────────────
-async function reverseGeocode(lat, lon) {
-  const url =
-    `https://api.bigdatacloud.net/data/reverse-geocode-client` +
-    `?latitude=${lat}&longitude=${lon}&localityLanguage=en`;
-  const data = await (await fetch(url)).json();
-  const city =
-    data?.city ||
-    data?.locality ||
-    data?.localityInfo?.administrative?.find(a => a.adminLevel === 5)?.name ||
-    data?.localityInfo?.administrative?.find(a => a.adminLevel === 4)?.name ||
-    '';
-  const state = data?.principalSubdivision || '';
-  return {city: city.trim(), state: state.trim()};
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -202,21 +159,9 @@ export default function LocationPickerScreen() {
 
   // ── persist & go back ─────────────────────────────────────────────────────
   const persist = useCallback(
-    async (city, state) => {
-      try {
-        const raw = await AsyncStorage.getItem('Reparvuser');
-        if (raw) {
-          await AsyncStorage.setItem(
-            'Reparvuser',
-            JSON.stringify({...JSON.parse(raw), city, state}),
-          );
-        } else {
-          await persistGuestLocation(city, state);
-        }
-        // ✅ Mark as manually chosen — GPS must not override this
-        await AsyncStorage.setItem('locationSource', 'manual');
-      } catch {}
-      dispatch(setUserLocation({city, state}));
+    async (city, state, source = 'manual') => {
+      // 'manual' pins this city; 'gps' keeps following the live location
+      await saveBrowseLocation(dispatch, city, state, source);
       if (onSelectParam) onSelectParam(city, state);
       navigation.goBack();
     },
@@ -290,14 +235,13 @@ export default function LocationPickerScreen() {
         setGeoMsg('Permission denied. Enable Location in Settings.');
         return;
       }
-      const {lat, lon} = await getLocationRobust();
-      const {city, state} = await reverseGeocode(lat, lon);
+      const {city, state} = await resumeLiveLocation();
       if (!city && !state) {
         setGeoPhase('error');
         setGeoMsg('Location detected but city not found. Select manually.');
         return;
       }
-      await persist(city, state);
+      await persist(city, state, 'gps');
     } catch (err) {
       setGeoPhase('error');
       setGeoMsg(locationErrMsg(err?.code));

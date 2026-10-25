@@ -316,7 +316,7 @@
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = reparv/reparv.entitlements;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEVELOPMENT_TEAM = 48666WPXNM;
 				ENABLE_BITCODE = NO;
 				INFOPLIST_FILE = reparv/Info.plist;
@@ -326,7 +326,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.6.9;
+				MARKETING_VERSION = 5.7.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",
@@ -352,7 +352,7 @@
 				CLANG_ALLOW_NON_MODULAR_INCLUDES_IN_FRAMEWORK_MODULES = YES;
 				CLANG_ENABLE_MODULES = YES;
 				CODE_SIGN_ENTITLEMENTS = reparv/reparv.entitlements;
-				CURRENT_PROJECT_VERSION = 47;
+				CURRENT_PROJECT_VERSION = 48;
 				DEVELOPMENT_TEAM = 48666WPXNM;
 				INFOPLIST_FILE = reparv/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Reparv;
@@ -361,7 +361,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 5.6.9;
+				MARKETING_VERSION = 5.7.0;
 				OTHER_LDFLAGS = (
 					"$(inherited)",
 					"-ObjC",

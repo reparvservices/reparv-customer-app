@@ -20,8 +20,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import {useSelector} from 'react-redux';
 import {getImageUri} from '../utils/imageHandle';
 import {fetchAllPropertiesCached} from '../services/allPropertiesCache';
+import {getLiveLocation} from '../services/liveLocation';
+import {useUserLocation} from '../hooks/userLocation';
 import {API_BASE_URL} from '../config/api';
-import {Filter, LocateFixed, ArrowLeft} from 'lucide-react-native';
+import {Filter, LocateFixed, ArrowLeft, Radius} from 'lucide-react-native';
 import {SafeAreaView, useSafeAreaInsets} from 'react-native-safe-area-context';
 
 // Enable LayoutAnimation on Android
@@ -208,6 +210,12 @@ function getCurrentPosition(options) {
       options,
     );
   });
+}
+
+/** Current fix from the app-wide live tracker, if it already has one. */
+function getLiveFix() {
+  const c = getLiveLocation().coords;
+  return c ? {lat: c.latitude, lon: c.longitude, accuracy: c.accuracy} : null;
 }
 
 /** Fast cached fix first, then high-accuracy refinement. */
@@ -1314,6 +1322,9 @@ export default function PropertyMapScreen({navigation}) {
 
   const [activeTab, setActiveTab] = useState('All');
   const [showFilters, setShowFilters] = useState(false);
+  // Radius panel stays closed until the user asks for it (map FAB)
+  const [showRadiusPanel, setShowRadiusPanel] = useState(false);
+  const [radiusPanelHeight, setRadiusPanelHeight] = useState(0);
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [maxBudget, setMaxBudget] = useState(0);
   const [budgetSliderVal, setBudgetSliderVal] = useState(0);
@@ -1525,20 +1536,22 @@ export default function PropertyMapScreen({navigation}) {
       };
 
       try {
-        let gpsCoords = null;
-        try {
-          gpsCoords = await getLocationRobust({
-            onFastFix: fastCoords => {
-              if (!isInIndia(fastCoords.lat, fastCoords.lon)) return;
-              setUserCoords(fastCoords);
-              setStatusMsg('Refining your location…');
-              if (webViewReady) {
-                flyTo(fastCoords.lat, fastCoords.lon, RADIUS_KM_DEFAULT);
-              }
-            },
-          });
-        } catch (_) {
-          gpsCoords = null;
+        let gpsCoords = getLiveFix();
+        if (!gpsCoords) {
+          try {
+            gpsCoords = await getLocationRobust({
+              onFastFix: fastCoords => {
+                if (!isInIndia(fastCoords.lat, fastCoords.lon)) return;
+                setUserCoords(fastCoords);
+                setStatusMsg('Refining your location…');
+                if (webViewReady) {
+                  flyTo(fastCoords.lat, fastCoords.lon, RADIUS_KM_DEFAULT);
+                }
+              },
+            });
+          } catch (_) {
+            gpsCoords = null;
+          }
         }
 
         if (gpsCoords && !isInIndia(gpsCoords.lat, gpsCoords.lon)) {
@@ -1573,6 +1586,32 @@ export default function PropertyMapScreen({navigation}) {
     boot();
   }, []);
 
+  // boot() can resolve (live fix + cached properties) before the WebView
+  // reports MAP_READY, so do the initial fly-in once both are ready.
+  const didInitialFly = useRef(false);
+  useEffect(() => {
+    if (didInitialFly.current || !webViewReady || status !== 'ready') return;
+    if (!userCoords) return;
+    didInitialFly.current = true;
+    flyTo(userCoords.lat, userCoords.lon, radiusKm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webViewReady, status]);
+
+  // Follow the user's live position: moves the blue dot + radius ring and
+  // refreshes the nearby list. The camera only moves on boot / recenter so
+  // it never fights the user's panning.
+  const {coords: liveCoords} = useUserLocation();
+  useEffect(() => {
+    if (status !== 'ready' || !liveCoords) return;
+    const {latitude: lat, longitude: lon, accuracy} = liveCoords;
+    if (!isInIndia(lat, lon)) return;
+    setUserCoords({lat, lon, accuracy, source: 'gps'});
+    setNearbyProperties(
+      filterNearby(allProperties, {lat, lon}, radiusKm),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveCoords, status]);
+
   const applyRadius = useCallback(
     km => {
       const r = parseFloat(km.toFixed(1));
@@ -1596,10 +1635,12 @@ export default function PropertyMapScreen({navigation}) {
         city: savedProfile?.city || user?.city,
         state: savedProfile?.state || user?.state || '',
       };
-      let gpsCoords = null;
-      try {
-        gpsCoords = await getLocationRobust();
-      } catch (_) {}
+      let gpsCoords = getLiveFix();
+      if (!gpsCoords) {
+        try {
+          gpsCoords = await getLocationRobust();
+        } catch (_) {}
+      }
       const coords = await resolveMapCoords(gpsCoords, profile);
       setUserCoords(coords);
       setNearbyProperties(
@@ -1677,7 +1718,10 @@ export default function PropertyMapScreen({navigation}) {
     hasActiveFilters;
   const showNoResultsHint =
     status === 'ready' && displayedProperties.length === 0 && !hasActiveFilters;
-  const sliderPanelBottom = SLIDER_PANEL_HEIGHT + insets.bottom;
+  // Measured panel height (falls back to the estimate before first layout)
+  const sliderPanelBottom = showRadiusPanel
+    ? radiusPanelHeight || SLIDER_PANEL_HEIGHT + insets.bottom
+    : insets.bottom + 8;
   const fabBottom = sliderPanelBottom + 16;
   const emptyBannerBottom = sliderPanelBottom + 12;
 
@@ -1835,6 +1879,18 @@ export default function PropertyMapScreen({navigation}) {
               <LocateFixed size={18} color={C.primary} />
             </TouchableOpacity>
             <TouchableOpacity
+              style={[s.fabBtn, showRadiusPanel && s.fabBtnActive]}
+              onPress={() => setShowRadiusPanel(v => !v)}
+              activeOpacity={0.85}
+              accessibilityLabel="Search radius">
+              <View style={[s.fabIcon, showRadiusPanel && s.fabIconActive]}>
+                <Radius
+                  size={18}
+                  color={showRadiusPanel ? C.white : C.textSub}
+                />
+              </View>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[s.fabBtn, activeFilterCount > 0 && s.fabBtnActive]}
               onPress={openFilters}
               activeOpacity={0.85}>
@@ -1855,10 +1911,16 @@ export default function PropertyMapScreen({navigation}) {
         )}
 
         {/* ── Bottom radius panel ── */}
-        {status === 'ready' && (
+        {status === 'ready' && showRadiusPanel && (
           <View
+            onLayout={e => setRadiusPanelHeight(e.nativeEvent.layout.height)}
             style={[s.sliderPanel, {paddingBottom: Math.max(insets.bottom, 12)}]}>
-            <View style={s.sliderHandle} />
+            <TouchableOpacity
+              onPress={() => setShowRadiusPanel(false)}
+              hitSlop={{top: 10, bottom: 10, left: 40, right: 40}}
+              accessibilityLabel="Close search radius">
+              <View style={s.sliderHandle} />
+            </TouchableOpacity>
 
             <ScrollView
               horizontal

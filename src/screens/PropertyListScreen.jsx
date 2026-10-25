@@ -17,13 +17,11 @@ import {
   Pressable,
 } from 'react-native';
 import PropertyCard from '../components/property/PropertyCard';
-import CustomSlider from '../components/utilsComponents/CustomSlider';
 import EmptyState from '../components/utilsComponents/CustomeEmptyState';
-import DistenceSlider from '../components/utilsComponents/DistenceSlider';
 import BackIcon from '../assets/image/new-property/back-icon.svg';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import SearchIcon from '../assets/image/home/search.png';
-import {ListFilter, X} from 'lucide-react-native';
+import {ListFilter, X, ChevronUp, ChevronDown} from 'lucide-react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {parseBhkList} from '../utils/parseBhk';
 import {fetchAllPropertiesCached} from '../services/allPropertiesCache';
@@ -62,6 +60,116 @@ const AMENITY_MATCH_MAP = {
   'Facing (Road / Park / Lake / Corner)': ['facing'],
   'Eco-friendly features': ['eco'],
 };
+
+// ─── Filter options mirrored from reparv.in (website: components/property/FilterSidebar.jsx) ───
+const NEW_PROPERTY_TYPES = [
+  'NewFlat',
+  'NewPlot',
+  'NewShop',
+  'RowHouse',
+  'Lease',
+  'FarmLand',
+  'FarmHouse',
+  'CommercialFlat',
+  'CommercialPlot',
+  'IndustrialSpace',
+];
+
+const RESALE_PROPERTY_TYPES = [
+  'Resale',
+  'ResaleFlat',
+  'ResaleHouse',
+  'ResaleShop',
+  'ResaleOffice',
+  'ResaleFarmLand',
+  'ResaleRowHouse',
+  'ResaleGodown',
+  'ResaleBunglow',
+];
+
+const isRentalCategory = category =>
+  category.startsWith('Rental') || category === 'Lease';
+
+const RENTAL_PROPERTY_TYPES = [
+  'RentalFlat',
+  'RentalShop',
+  'RentalHouse',
+  'RentalOffice',
+];
+
+const FLAT_BHK_TYPES = [
+  '1 RK',
+  '1 BHK',
+  '2 BHK',
+  '2.5 BHK',
+  '3 BHK',
+  '3.5 BHK',
+  '4 BHK',
+  '5 BHK',
+  'Above 5 BHK',
+  'Pent House',
+  'Builder Floor',
+  'Studio Apartment',
+  'Duplex Apartment',
+  'Serviced Apartment',
+];
+
+const BHK_TYPES_BY_CATEGORY = {
+  NewFlat: FLAT_BHK_TYPES,
+  RentalFlat: FLAT_BHK_TYPES,
+  NewPlot: [
+    'Corner Plot',
+    'Park Facing Plot',
+    'Road Facing Plot',
+    'Gated Community Plot',
+  ],
+  CommercialFlat: [
+    'Office Space',
+    'Co-Working Space',
+    'Corporate Office',
+    'Studio Office',
+  ],
+  CommercialShop: ['Shop', 'Showroom', 'Restaurant / Cafe', 'Bank / ATM'],
+  IndustrialSpace: ['Godown', 'Cold Storage', 'Small Manufacturing Unit'],
+  CommercialPlot: [
+    'Office Building Plot',
+    'Warehouse Plot',
+    'Mixed-Use Development Plot',
+    'Highway-Facing Plot',
+    'Petrol Pump Plot',
+    'School / Hospital Plot',
+  ],
+};
+
+const formatCategoryLabel = category =>
+  category?.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+// ─── Collapsible filter section (title + chevron), as on reparv.in ───
+const FilterSection = ({title, open, onToggle, children}) => (
+  <View style={styles.filterSection}>
+    <TouchableOpacity
+      style={styles.filterSectionHeader}
+      onPress={onToggle}
+      activeOpacity={0.7}>
+      <Text style={styles.filterSectionTitle}>{title}</Text>
+      {open ? (
+        <ChevronUp size={18} color="#111" strokeWidth={2.5} />
+      ) : (
+        <ChevronDown size={18} color="#111" strokeWidth={2.5} />
+      )}
+    </TouchableOpacity>
+    {open && <View style={styles.filterSectionBody}>{children}</View>}
+  </View>
+);
+
+const CheckboxRow = ({label, checked, onPress}) => (
+  <TouchableOpacity style={styles.checkboxRow} onPress={onPress}>
+    <View style={[styles.checkbox, checked && styles.checkboxActive]}>
+      {checked && <Text style={styles.checkboxTick}>✓</Text>}
+    </View>
+    <Text style={styles.checkboxText}>{label}</Text>
+  </TouchableOpacity>
+);
 
 // ─── BHK-only pattern: only show genuine BHK / bedroom type values ───
 const BHK_VALID_PATTERN = /^\d+(\.\d+)?\s*(bhk|rk|bedroom|bed|studio)/i;
@@ -102,6 +210,9 @@ const PropertyListScreen = () => {
   const browseCity = useSelector(state => selectBrowseCity(state));
   const route = useRoute();
   const ptype = route?.params?.ptype;
+  // 'buy' = everything for sale (new + resale, no rentals), like reparv.in /properties/type/buy
+  // 'rent' = every rental listing (Rental* + Lease)
+  const listingGroup = route?.params?.listingGroup;
   const initialCity = route?.params?.city ?? browseCity ?? '';
 
   const [flats, setFlats] = useState([]);
@@ -123,15 +234,22 @@ const PropertyListScreen = () => {
   // Filter option lists
   const [propertyCategory, setPropertyCategory] = useState([]);
   const [bhk, setBhk] = useState([]);
-  const [budget, setBudget] = useState([0.01, 2000]); // 0.01L=₹1K to 2000L=₹20Cr
-  const [radius, setRadius] = useState(0);
+  // Budget inputs are in rupees (as on reparv.in); filterbudget holds lakhs
+  const [budgetInputs, setBudgetInputs] = useState({min: '', max: ''});
+  const [openSections, setOpenSections] = useState({
+    type: true,
+    bhk: true,
+    budget: true,
+    locations: true,
+    amenities: true,
+  });
 
   // Active filter states
   const [amenities, setAmenities] = useState([]);
   const [filterpropertyCategory, setFilterPropertyCategory] = useState([]);
   const [filterbhk, setFilterBhk] = useState([]);
   const [filterbudget, setFilterBudget] = useState([]);
-  const [filterradius, setFilterRadius] = useState();
+  const [filterLocations, setFilterLocations] = useState([]);
 
   // ─── Android back handler closes filter ───
   useEffect(() => {
@@ -428,6 +546,14 @@ const PropertyListScreen = () => {
       setSelectedTab(parsedCategory);
 
     const filtered = flats.filter(item => {
+      const category = String(item.propertyCategory || '');
+      const matchGroup =
+        listingGroup === 'buy'
+          ? !category.startsWith('Rental')
+          : listingGroup === 'rent'
+          ? isRentalCategory(category)
+          : true;
+
       const matchTab =
         !effectiveTab ||
         normalizePropertyCategory(item.propertyCategory) ===
@@ -463,6 +589,12 @@ const PropertyListScreen = () => {
         (priceInLakh >= filterbudget[0] && priceInLakh <= filterbudget[1]);
 
       const matchCity = cityMatches(item.city, effectiveCity);
+
+      const matchLocation =
+        !filterLocations.length ||
+        filterLocations.some(
+          loc => normalize(loc) === normalize(item.location || ''),
+        );
 
       let strippedQuery = searchText.toLowerCase();
       strippedQuery = strippedQuery.replace(/\d+\s*(?:bhk|bedroom|bed)/g, '');
@@ -528,11 +660,13 @@ const PropertyListScreen = () => {
         });
 
       return (
+        matchGroup &&
         matchTab &&
         matchCategory &&
         matchBhk &&
         matchBudget &&
         matchCity &&
+        matchLocation &&
         matchSearch &&
         matchAmenities
       );
@@ -542,12 +676,14 @@ const PropertyListScreen = () => {
     setFilterVisible(false);
   }, [
     flats,
+    listingGroup,
     searchText,
     selectedCity,
     selectedTab,
     filterpropertyCategory,
     filterbhk,
     filterbudget,
+    filterLocations,
     amenities,
     parseSearchQuery,
   ]);
@@ -561,7 +697,77 @@ const PropertyListScreen = () => {
 
   const renderItem = useCallback(({item}) => <PropertyCard item={item} />, []);
 
+  // Fixed Property Type list per listing mode, same as reparv.in
+  const filterTypeOptions = React.useMemo(() => {
+    if (ptype?.startsWith('Rental') || listingGroup === 'rent') {
+      return RENTAL_PROPERTY_TYPES;
+    }
+    if (ptype?.startsWith('Resale')) return RESALE_PROPERTY_TYPES;
+    if (listingGroup === 'buy') {
+      return [...NEW_PROPERTY_TYPES, ...RESALE_PROPERTY_TYPES];
+    }
+    return NEW_PROPERTY_TYPES;
+  }, [ptype, listingGroup]);
+
+  const selectedFilterType = filterpropertyCategory[0] || '';
+  const bhkOptions = BHK_TYPES_BY_CATEGORY[selectedFilterType] || [];
+
+  // Locations available for the current city + chosen type
+  const locationOptions = React.useMemo(() => {
+    const typeForLocations = selectedFilterType || selectedTab;
+    return [
+      ...new Set(
+        flats
+          .filter(
+            item =>
+              cityMatches(item.city, selectedCity) &&
+              (!typeForLocations ||
+                normalizePropertyCategory(item.propertyCategory) ===
+                  normalizePropertyCategory(typeForLocations)),
+          )
+          .map(item => item.location?.trim())
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b));
+  }, [flats, selectedCity, selectedFilterType, selectedTab]);
+
+  const toggleSection = key =>
+    setOpenSections(prev => ({...prev, [key]: !prev[key]}));
+
+  const toggleInList = (setFn, value) =>
+    setFn(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value],
+    );
+
+  const onBudgetInputChange = (key, text) => {
+    const next = {...budgetInputs, [key]: text.replace(/[^0-9]/g, '')};
+    setBudgetInputs(next);
+    if (!next.min && !next.max) {
+      setFilterBudget([]);
+      return;
+    }
+    setFilterBudget([
+      next.min ? Number(next.min) / 100000 : 0,
+      next.max ? Number(next.max) / 100000 : Infinity,
+    ]);
+  };
+
+  const clearFilterSelections = () => {
+    setFilterPropertyCategory([]);
+    setFilterBhk([]);
+    setFilterBudget([]);
+    setBudgetInputs({min: '', max: ''});
+    setFilterLocations([]);
+    setAmenities([]);
+  };
+
   const filteredCategories = React.useMemo(() => {
+    if (!ptype && listingGroup === 'buy') {
+      return propertyCategory.filter(item => !item.startsWith('Rental'));
+    }
+    if (!ptype && listingGroup === 'rent') {
+      return propertyCategory.filter(isRentalCategory);
+    }
     if (!ptype) return propertyCategory;
     if (ptype.startsWith('Rental'))
       return propertyCategory.filter(item => item.startsWith('Rental'));
@@ -570,7 +776,7 @@ const PropertyListScreen = () => {
     return propertyCategory.filter(
       item => !item.startsWith('Rental') && !item.startsWith('Resale'),
     );
-  }, [ptype, propertyCategory]);
+  }, [ptype, listingGroup, propertyCategory]);
 
   // ─── Active filters for display chips ───
   const activeFilterChips = React.useMemo(() => {
@@ -578,7 +784,7 @@ const PropertyListScreen = () => {
     filterpropertyCategory.forEach(cat =>
       chips.push({
         key: `cat-${cat}`,
-        label: cat,
+        label: formatCategoryLabel(cat),
         onRemove: () =>
           setFilterPropertyCategory(prev => prev.filter(c => c !== cat)),
       }),
@@ -590,6 +796,13 @@ const PropertyListScreen = () => {
         onRemove: () => setFilterBhk(prev => prev.filter(c => c !== b)),
       }),
     );
+    filterLocations.forEach(loc =>
+      chips.push({
+        key: `loc-${loc}`,
+        label: loc,
+        onRemove: () => setFilterLocations(prev => prev.filter(l => l !== loc)),
+      }),
+    );
     amenities.forEach(a =>
       chips.push({
         key: `am-${a}`,
@@ -597,34 +810,35 @@ const PropertyListScreen = () => {
         onRemove: () => setAmenities(prev => prev.filter(c => c !== a)),
       }),
     );
-    if (
-      filterbudget.length === 2 &&
-      (filterbudget[0] > 0.01 || filterbudget[1] < 2000)
-    ) {
+    if (filterbudget.length === 2) {
+      const [min, max] = filterbudget;
+      let label;
+      if (min > 0 && max !== Infinity)
+        label = `₹${formatPrice(min)} – ₹${formatPrice(max)}`;
+      else if (min > 0) label = `Above ₹${formatPrice(min)}`;
+      else label = `Under ₹${formatPrice(max)}`;
       chips.push({
         key: 'budget',
-        label: `₹${formatPrice(filterbudget[0])} – ₹${formatPrice(
-          filterbudget[1],
-        )}`,
+        label,
         onRemove: () => {
           setFilterBudget([]);
-          setBudget([0.01, 2000]);
+          setBudgetInputs({min: '', max: ''});
         },
       });
     }
     return chips;
-  }, [filterpropertyCategory, filterbhk, amenities, filterbudget]);
+  }, [
+    filterpropertyCategory,
+    filterbhk,
+    filterLocations,
+    amenities,
+    filterbudget,
+  ]);
 
   const hasActiveFilters = activeFilterChips.length > 0;
 
   const resetAllFilters = () => {
-    setFilterPropertyCategory([]);
-    setFilterBhk([]);
-    setFilterBudget([]);
-    setBudget([0.01, 2000]);
-    setFilterRadius(0);
-    setRadius(0);
-    setAmenities([]);
+    clearFilterSelections();
     applyFilters();
   };
 
@@ -875,11 +1089,7 @@ const PropertyListScreen = () => {
                 setSearchText('');
               }}
               onReset={() => {
-                setFilterPropertyCategory([]);
-                setFilterBhk([]);
-                setFilterBudget([]);
-                setFilterRadius(0);
-                setAmenities([]);
+                clearFilterSelections();
                 setSelectedCity('');
                 setSelectedTab('');
                 setSearchText('');
@@ -922,16 +1132,7 @@ const PropertyListScreen = () => {
                 <View style={styles.headerRow}>
                   <Text style={styles.headerTitle}>Filters</Text>
                   <View style={styles.headerActions}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setFilterPropertyCategory([]);
-                        setFilterBhk([]);
-                        setFilterBudget([0.01, 2000]);
-                        setBudget([0.01, 2000]);
-                        setFilterRadius(0);
-                        setRadius(0);
-                        setAmenities([]);
-                      }}>
+                    <TouchableOpacity onPress={clearFilterSelections}>
                       <Text style={styles.resetText}>Reset All</Text>
                     </TouchableOpacity>
 
@@ -945,190 +1146,166 @@ const PropertyListScreen = () => {
                   </View>
                 </View>
 
-                <View style={styles.separator} />
-
                 {/* ── Scrollable content ── */}
                 <ScrollView
                   showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
                   contentContainerStyle={{paddingBottom: 8}}>
-                  {/* Property Type */}
-                  <Text style={styles.sectionTitle}>Property Type</Text>
-                  <View style={styles.chipWrap}>
-                    {filteredCategories.length > 0 &&
-                      filteredCategories.map(item => (
-                        <TouchableOpacity
-                          key={item}
-                          onPress={() => {
-                            setSelectedTab('');
-                            setFilterPropertyCategory(prev =>
-                              prev.includes(item)
-                                ? prev.filter(i => i !== item)
-                                : [...prev, item],
-                            );
-                          }}
-                          style={[
-                            styles.chip,
-                            filterpropertyCategory.includes(item) &&
-                              styles.chipActive,
-                          ]}>
-                          <Text
-                            style={[
-                              styles.chipText,
-                              filterpropertyCategory.includes(item) &&
-                                styles.chipTextActive,
-                            ]}>
-                            {item}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-
-                  <View style={styles.separator} />
-
-                  {/* BHK — only real BHK values */}
-                  <Text style={styles.sectionTitle}>BHK Configuration</Text>
-                  <View style={styles.chipWrap}>
-                    {bhk.length > 0 &&
-                      bhk.map(item => (
-                        <TouchableOpacity
-                          key={item}
-                          onPress={() =>
-                            setFilterBhk(prev =>
-                              prev.includes(item)
-                                ? prev.filter(i => i !== item)
-                                : [...prev, item],
-                            )
-                          }
-                          style={[
-                            styles.chip,
-                            filterbhk.includes(item) && styles.chipActive,
-                          ]}>
-                          <Text
-                            style={[
-                              styles.chipText,
-                              filterbhk.includes(item) && styles.chipTextActive,
-                            ]}>
-                            {item}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                  </View>
-
-                  <View style={styles.separator} />
-
-                  {/* Budget — 1L to 20Cr */}
-                  <Text style={[styles.sectionTitle, {marginTop: 5}]}>
-                    Budget Range
-                  </Text>
-                  <View style={styles.rangeRow}>
-                    <View style={styles.rangeBox}>
-                      <Text style={styles.rangeLabel}>Min</Text>
-                      <Text style={styles.rangeValue}>
-                        ₹ {formatPrice(budget[0])}
-                      </Text>
-                    </View>
-                    <View style={styles.rangeDash}>
-                      <Text style={{color: '#999'}}>—</Text>
-                    </View>
-                    <View style={styles.rangeBox}>
-                      <Text style={styles.rangeLabel}>Max</Text>
-                      <Text style={styles.rangeValue}>
-                        ₹ {formatPrice(budget[1])}
-                      </Text>
-                    </View>
-                  </View>
-                  <CustomSlider
-                    min={0.01}
-                    max={2000}
-                    values={budget}
-                    onChange={val => {
-                      setBudget(val);
-                      setFilterBudget(val);
-                    }}
-                  />
-
-                  <View style={styles.separator} />
-
-                  {/* Radius */}
-                  <Text style={styles.sectionTitle}>Location Radius</Text>
-                  <View style={styles.radiusRow}>
-                    <Text style={{color: '#000'}}>Within {radius} km</Text>
-                    <Text style={{color: '#7A2EFF', fontWeight: '600'}}>
-                      {radius} km
-                    </Text>
-                  </View>
-                  <DistenceSlider
-                    min={0}
-                    max={100}
-                    value={radius}
-                    unit="km"
-                    onChange={val => {
-                      setRadius(val);
-                      setFilterRadius(val);
-                    }}
-                  />
-
-                  <View style={styles.separator} />
-
-                  {/* Amenities */}
-                  <Text style={styles.sectionTitle}>Amenities</Text>
-                  <FlatList
-                    data={AMENITIES_DATA}
-                    keyExtractor={item => item}
-                    numColumns={2}
-                    scrollEnabled={false}
-                    columnWrapperStyle={{justifyContent: 'space-between'}}
-                    renderItem={({item}) => (
-                      <TouchableOpacity
-                        style={styles.checkboxRow}
-                        onPress={() =>
-                          setAmenities(prev =>
-                            prev.includes(item)
-                              ? prev.filter(a => a !== item)
-                              : [...prev, item],
-                          )
-                        }>
-                        <View
-                          style={[
-                            styles.checkbox,
-                            amenities.includes(item) && styles.checkboxActive,
-                          ]}>
-                          {amenities.includes(item) && (
+                  <FilterSection
+                    title="Property Type"
+                    open={openSections.type}
+                    onToggle={() => toggleSection('type')}>
+                    <View style={styles.chipWrap}>
+                      {filterTypeOptions.map(item => {
+                        const active = selectedFilterType === item;
+                        return (
+                          <TouchableOpacity
+                            key={item}
+                            onPress={() => {
+                              setSelectedTab('');
+                              setFilterPropertyCategory(active ? [] : [item]);
+                              setFilterBhk([]);
+                              setFilterLocations([]);
+                            }}
+                            style={[styles.chip, active && styles.chipActive]}>
                             <Text
-                              style={{
-                                color: '#fff',
-                                fontSize: 10,
-                                fontWeight: '700',
-                              }}>
-                              ✓
+                              style={[
+                                styles.chipText,
+                                active && styles.chipTextActive,
+                              ]}>
+                              {formatCategoryLabel(item)}
                             </Text>
-                          )}
-                        </View>
-                        <Text style={styles.checkboxText}>{item}</Text>
-                      </TouchableOpacity>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </FilterSection>
+
+                  <FilterSection
+                    title="BHK Configuration"
+                    open={openSections.bhk}
+                    onToggle={() => toggleSection('bhk')}>
+                    {bhkOptions.length > 0 ? (
+                      <View style={styles.chipWrap}>
+                        {bhkOptions.map(item => {
+                          const active = filterbhk.includes(item);
+                          return (
+                            <TouchableOpacity
+                              key={item}
+                              onPress={() => setFilterBhk(active ? [] : [item])}
+                              style={[
+                                styles.chip,
+                                styles.chipSquare,
+                                active && styles.chipActive,
+                              ]}>
+                              <Text
+                                style={[
+                                  styles.chipText,
+                                  active && styles.chipTextActive,
+                                ]}>
+                                {item}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <Text style={styles.filterHint}>
+                        {selectedFilterType
+                          ? 'No configurations for this property type'
+                          : 'Select a property type to see configurations'}
+                      </Text>
                     )}
-                  />
+                  </FilterSection>
+
+                  <FilterSection
+                    title="Budget Range"
+                    open={openSections.budget}
+                    onToggle={() => toggleSection('budget')}>
+                    <View style={styles.budgetRow}>
+                      <View style={styles.budgetField}>
+                        <Text style={styles.budgetLabel}>Min</Text>
+                        <TextInput
+                          value={budgetInputs.min}
+                          onChangeText={t => onBudgetInputChange('min', t)}
+                          keyboardType="number-pad"
+                          placeholder="₹ Min"
+                          placeholderTextColor="#9CA3AF"
+                          style={styles.budgetInput}
+                        />
+                      </View>
+                      <View style={styles.budgetField}>
+                        <Text style={styles.budgetLabel}>Max</Text>
+                        <TextInput
+                          value={budgetInputs.max}
+                          onChangeText={t => onBudgetInputChange('max', t)}
+                          keyboardType="number-pad"
+                          placeholder="₹ Max"
+                          placeholderTextColor="#9CA3AF"
+                          style={styles.budgetInput}
+                        />
+                      </View>
+                    </View>
+                  </FilterSection>
+
+                  <FilterSection
+                    title="Locations"
+                    open={openSections.locations}
+                    onToggle={() => toggleSection('locations')}>
+                    {locationOptions.length > 0 ? (
+                      <ScrollView
+                        nestedScrollEnabled
+                        style={styles.checkList}
+                        showsVerticalScrollIndicator={false}>
+                        {locationOptions.map(loc => (
+                          <CheckboxRow
+                            key={loc}
+                            label={loc}
+                            checked={filterLocations.includes(loc)}
+                            onPress={() =>
+                              toggleInList(setFilterLocations, loc)
+                            }
+                          />
+                        ))}
+                      </ScrollView>
+                    ) : (
+                      <Text style={styles.filterHint}>
+                        No locations available
+                      </Text>
+                    )}
+                  </FilterSection>
+
+                  <FilterSection
+                    title="Amenities"
+                    open={openSections.amenities}
+                    onToggle={() => toggleSection('amenities')}>
+                    <ScrollView
+                      nestedScrollEnabled
+                      style={styles.checkList}
+                      showsVerticalScrollIndicator={false}>
+                      {AMENITIES_DATA.map(item => (
+                        <CheckboxRow
+                          key={item}
+                          label={item}
+                          checked={amenities.includes(item)}
+                          onPress={() => toggleInList(setAmenities, item)}
+                        />
+                      ))}
+                    </ScrollView>
+                  </FilterSection>
                 </ScrollView>
 
                 {/* ── Sticky bottom buttons ── */}
                 <View style={styles.stickyFooter}>
                   <TouchableOpacity
                     style={styles.footerResetBtn}
-                    onPress={() => {
-                      setFilterPropertyCategory([]);
-                      setFilterBhk([]);
-                      setFilterBudget([0.01, 2000]);
-                      setBudget([0.01, 2000]);
-                      setFilterRadius(0);
-                      setRadius(0);
-                      setAmenities([]);
-                    }}>
+                    onPress={clearFilterSelections}>
                     <Text style={styles.footerResetText}>Reset</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.applyBtn}
                     onPress={applyFilters}>
-                    <Text style={styles.applyText}>Apply Filters</Text>
+                    <Text style={styles.applyText}>Apply</Text>
                   </TouchableOpacity>
                 </View>
               </Pressable>
@@ -1422,8 +1599,8 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   resetText: {
-    color: '#7A2EFF',
-    fontWeight: '600',
+    color: '#000',
+    fontWeight: '400',
     fontSize: 14,
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
@@ -1439,27 +1616,43 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  sectionTitle: {
+  // ── Filter sections (mirrors reparv.in FilterSidebar) ──
+  filterSection: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D9D9D9',
+  },
+  filterSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  filterSectionTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
-    marginTop: 18,
+    fontFamily: 'SegoeUI-Bold',
+    fontWeight: '700',
     color: '#000',
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
       default: {},
     }),
   },
-  chipWrap: {flexDirection: 'row', flexWrap: 'wrap', gap: 10},
+  filterSectionBody: {marginTop: 14},
+  filterHint: {fontSize: 12, color: '#9CA3AF'},
+
+  chipWrap: {flexDirection: 'row', flexWrap: 'wrap', gap: 8},
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#F4EDFF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    backgroundColor: '#FBF5FF',
   },
-  chipActive: {backgroundColor: '#7A2EFF'},
+  chipSquare: {borderRadius: 8},
+  chipActive: {backgroundColor: '#8A38F5'},
   chipText: {
-    color: '#555',
+    fontSize: 12,
+    fontWeight: '500',
+    color: '#000',
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
       default: {},
@@ -1467,7 +1660,6 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#fff',
-    fontWeight: '600',
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
       default: {},
@@ -1475,68 +1667,55 @@ const styles = StyleSheet.create({
   },
 
   // ── Budget ──
-  rangeRow: {
+  budgetRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 16,
   },
-  rangeBox: {
-    backgroundColor: '#F4EDFF',
-    padding: 10,
-    borderRadius: 10,
-    width: '44%',
-    alignItems: 'center',
-  },
-  rangeLabel: {
-    fontSize: 10,
-    color: '#9CA3AF',
+  budgetField: {flex: 1},
+  budgetLabel: {
+    marginLeft: 4,
+    marginBottom: 4,
+    fontSize: 12,
     fontWeight: '600',
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#000',
   },
-  rangeValue: {
+  budgetInput: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: Platform.OS === 'ios' ? 10 : 8,
     fontSize: 14,
-    fontWeight: '700',
-    color: '#7A2EFF',
-  },
-  rangeDash: {alignItems: 'center', justifyContent: 'center'},
-
-  radiusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    color: '#000',
   },
 
-  // ── Amenities checkboxes ──
+  // ── Locations / Amenities checkboxes ──
+  checkList: {maxHeight: 170},
   checkboxRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    paddingVertical: 8,
-    paddingRight: 12,
+    alignItems: 'center',
+    paddingVertical: 6,
   },
   checkbox: {
-    width: 18,
-    height: 18,
-    borderWidth: 1.5,
-    borderColor: '#999',
+    width: 16,
+    height: 16,
+    borderWidth: 2,
+    borderColor: '#9CA3AF',
     marginRight: 8,
     borderRadius: 4,
-    marginTop: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
   checkboxActive: {
-    backgroundColor: '#7A2EFF',
-    borderColor: '#7A2EFF',
+    backgroundColor: '#8A38F5',
+    borderColor: '#8A38F5',
   },
+  checkboxTick: {color: '#fff', fontSize: 9, fontWeight: '700'},
   checkboxText: {
     flex: 1,
     fontSize: 13,
-    color: '#444',
-    flexWrap: 'wrap',
+    color: '#111',
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
       default: {},
@@ -1546,50 +1725,42 @@ const styles = StyleSheet.create({
   // ── Sticky footer ──
   stickyFooter: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 16,
     paddingVertical: 16,
     paddingHorizontal: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
     backgroundColor: '#FFF',
   },
   footerResetBtn: {
     flex: 1,
-    paddingVertical: 14,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#7A2EFF',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   footerResetText: {
-    color: '#7A2EFF',
-    fontWeight: '700',
+    color: '#374151',
+    fontWeight: '600',
     fontSize: 14,
   },
   applyBtn: {
-    flex: 2,
-    backgroundColor: '#7A2EFF',
-    paddingVertical: 14,
-    borderRadius: 10,
+    flex: 1,
+    backgroundColor: '#8A38F5',
+    paddingVertical: 12,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   applyText: {
     color: '#FFF',
     textAlign: 'center',
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 14,
     ...Platform.select({
       android: {includeFontPadding: false, textAlignVertical: 'center'},
       default: {},
     }),
-  },
-
-  separator: {
-    width: '100%',
-    height: 1,
-    backgroundColor: '#E5E7EB',
-    marginVertical: 10,
   },
 });

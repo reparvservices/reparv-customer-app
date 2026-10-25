@@ -73,7 +73,9 @@ export default function RentProperty() {
           <TouchableOpacity
             style={styles.ctaBtn}
             activeOpacity={0.85}
-            onPress={() => navigation.navigate('RentProperty')}>
+            onPress={() =>
+              navigation.navigate('PropertyListScreen', {listingGroup: 'rent'})
+            }>
             <Text
               style={styles.ctaText}
               numberOfLines={1}

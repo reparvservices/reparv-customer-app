@@ -18,8 +18,6 @@ import {
   Modal,
   Animated,
   Easing,
-  PermissionsAndroid,
-  Platform,
 } from 'react-native';
 import {Highlights} from '../components/PropertyDetails/Highlights';
 import {Overview} from '../components/PropertyDetails/Overview';
@@ -58,6 +56,14 @@ import {
   CalendarCheck,
 } from 'lucide-react-native';
 import {PropertyIntro} from '../components/PropertyDetails/PropertyIntro';
+import {TypeWisePricing} from '../components/PropertyDetails/TypeWisePricing';
+import {PropertyBrochure} from '../components/PropertyDetails/PropertyBrochure';
+import {PropertyVideos} from '../components/PropertyDetails/PropertyVideos';
+import {
+  propertyContactOf,
+  recordPropertyEnquiry,
+  trackPropertyAction,
+} from '../utils/propertyEnquiry';
 import LinearGradient from 'react-native-linear-gradient';
 import SimilerProperty from '../components/PropertyDetails/SimilerProperty';
 import {useNavigation, useRoute} from '@react-navigation/native';
@@ -70,7 +76,7 @@ import PropertyVideoModal from '../components/PropertyDetails/VideoModel';
 import {SafeAreaView} from 'react-native-safe-area-context';
 import {getImageUri, parseFrontView} from '../utils/imageHandle';
 import PlotAvailabilityModal from './PlotAvailability';
-import Geolocation from '@react-native-community/geolocation';
+import {formatDistance, useUserLocation} from '../hooks/userLocation';
 
 // Listings store 'NA' / 'null' / 'No' when there is no RERA number
 const hasReraNumber = value =>
@@ -86,9 +92,14 @@ const BASE_URL = `${API_BASE_URL}/customerapp`;
 const AVAILABILITY_CATEGORIES = [
   'NewPlot',
   'NewFlat',
+  'CommercialPlot',
+  'CommercialFlat',
   'RentalFlat',
   'RentalPlot',
 ];
+
+// Categories whose availability comes from wings/flats (the rest use khasra/plots)
+const FLAT_AVAILABILITY_CATEGORIES = ['NewFlat', 'CommercialFlat', 'RentalFlat'];
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ALL IMAGE KEYS — every DB image column in display order
@@ -441,7 +452,6 @@ const PropertyDetailsScreen = () => {
   const [removing, setRemoving] = useState(false);
   const [zoomVisible, setZoomVisible] = useState(false);
   const [zoomIndex, setZoomIndex] = useState(0);
-  const [userDistance, setUserDistance] = useState(null);
 
   const mainImageRef = useRef(null);
   const cardScrollRef = useRef(null);
@@ -512,8 +522,10 @@ const PropertyDetailsScreen = () => {
     if (!propertyData?.propertyid) return;
     const fetchPlotData = async () => {
       try {
-        const isNewFlat = propertyData?.propertyCategory === 'NewFlat';
-        const url = isNewFlat
+        const isFlat = FLAT_AVAILABILITY_CATEGORIES.includes(
+          propertyData?.propertyCategory,
+        );
+        const url = isFlat
           ? `${API_BASE_URL}/frontend/properties/additionalinfo/flat/get/all/${propertyData.propertyid}`
           : `${API_BASE_URL}/frontend/properties/additionalinfo/plot/get/all/${propertyData.propertyid}`;
         const response = await fetch(url);
@@ -526,56 +538,22 @@ const PropertyDetailsScreen = () => {
     fetchPlotData();
   }, [propertyData?.propertyid]);
 
-  // ── Get user location & compute distance from property ───────────────────
-  useEffect(() => {
-    if (!propertyData) return;
+  // ── Live distance from user to property ───────────────────────────────────
+  const {coords: userCoords, loading: userLocationLoading} = useUserLocation();
+  let userDistance = null; // null = still locating
+  if (propertyData) {
+    const propLat = parseFloat(propertyData.latitude);
+    const propLon = parseFloat(propertyData.longitude);
     if (!propertyData.latitude || !propertyData.longitude) {
-      setUserDistance('unavailable');
-      return;
+      userDistance = 'unavailable';
+    } else if (userCoords) {
+      userDistance = formatDistance(
+        haversineKm(userCoords.latitude, userCoords.longitude, propLat, propLon),
+      );
+    } else if (!userLocationLoading) {
+      userDistance = 'unavailable';
     }
-    const fetchDistance = async () => {
-      try {
-        if (Platform.OS === 'android') {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-            {
-              title: 'Location Permission',
-              message:
-                'Allow Reparv to access your location to show distance from this property.',
-              buttonNeutral: 'Ask Me Later',
-              buttonNegative: 'Cancel',
-              buttonPositive: 'OK',
-            },
-          );
-          if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-            setUserDistance('unavailable');
-            return;
-          }
-        }
-        Geolocation.getCurrentPosition(
-          position => {
-            const {latitude, longitude} = position.coords;
-            const dist = haversineKm(
-              latitude,
-              longitude,
-              parseFloat(propertyData.latitude),
-              parseFloat(propertyData.longitude),
-            );
-            setUserDistance(
-              dist < 1
-                ? `${Math.round(dist * 1000)} m`
-                : `${dist.toFixed(1)} km`,
-            );
-          },
-          () => setUserDistance('unavailable'),
-          {enableHighAccuracy: false, timeout: 5000, maximumAge: 300000},
-        );
-      } catch {
-        setUserDistance('unavailable');
-      }
-    };
-    fetchDistance();
-  }, [propertyData?.latitude, propertyData?.longitude]);
+  }
 
   // ── Derived: build full hero image list from ALL columns ──────────────────
   // Only include keys that have images — order follows THUMBNAIL_CATEGORIES
@@ -623,7 +601,10 @@ const PropertyDetailsScreen = () => {
 
   const onShareProperty = async () => {
     try {
-      await Share.share({message: buildShareText(propertyData)});
+      const result = await Share.share({message: buildShareText(propertyData)});
+      if (result?.action === Share.sharedAction) {
+        trackPropertyAction(propertyData?.propertyid, 'share');
+      }
     } catch (error) {
       console.warn('Error sharing property', error);
     }
@@ -639,7 +620,9 @@ const PropertyDetailsScreen = () => {
     ) {
       return;
     }
-    const phoneNumber = propertyData?.projectPartnerContact || '918010881965';
+    const phoneNumber = `91${propertyContactOf(propertyData)}`;
+    recordPropertyEnquiry(propertyData, user, 'whatsapp');
+    trackPropertyAction(propertyData?.propertyid, 'whatsapp');
     const message =
       `Hello,\n\nNew property enquiry:\n\n👤 *Client:* ${user?.fullname}\n` +
       `📞 *Contact:* ${user?.contact}\n🏠 *Property:* ${propertyData?.propertyCategory}\n` +
@@ -867,7 +850,7 @@ const PropertyDetailsScreen = () => {
                     <Image
                       source={{uri: getImageUri(item)}}
                       style={styles.heroImage}
-                      resizeMode="contain"
+                      resizeMode="cover"
                     />
                   </TouchableOpacity>
                 ))}
@@ -886,7 +869,7 @@ const PropertyDetailsScreen = () => {
                     ),
                   }}
                   style={styles.heroImage}
-                  resizeMode="contain"
+                  resizeMode="cover"
                 />
               </TouchableOpacity>
             )}
@@ -965,7 +948,11 @@ const PropertyDetailsScreen = () => {
                 activeOpacity={0.9}
                 onPress={() => setVideoModel(true)}>
                 <Image
-                  source={{uri: getImageUri(propertyData?.frontView?.[0])}}
+                  source={{
+                    uri: getImageUri(
+                      parseFrontView(propertyData?.frontView)[0],
+                    ),
+                  }}
                   style={styles.videoPreview}
                 />
                 <LinearGradient
@@ -1278,9 +1265,9 @@ const PropertyDetailsScreen = () => {
                   ) {
                     return;
                   }
-                  Linking.openURL(
-                    `tel:${propertyData?.projectPartnerContact || 8010881965}`,
-                  );
+                  recordPropertyEnquiry(propertyData, user, 'call');
+                  trackPropertyAction(propertyData?.propertyid, 'call');
+                  Linking.openURL(`tel:+91${propertyContactOf(propertyData)}`);
                 }}>
                 <Phone size={18} color="#7C3AED" strokeWidth={2} />
                 <Text style={ctaStyles.callBtnText}>Call Promoter</Text>
@@ -1336,6 +1323,13 @@ const PropertyDetailsScreen = () => {
               Free site visit • No brokerage charges
             </Text>
           </View>
+
+          {/* ── TYPE-WISE PRICING ─────────────────────────────────────────── */}
+          <TypeWisePricing
+            propertyId={propertyData?.propertyid}
+            propertyCategory={propertyData?.propertyCategory}
+            propertyType={propertyData?.propertyType}
+          />
 
           {/* ── TABS ──────────────────────────────────────────────────────── */}
           <View style={styles.tabsWrapper}>
@@ -1397,6 +1391,17 @@ const PropertyDetailsScreen = () => {
               />
             )}
           </View>
+
+          {/* ── BROCHURE & VIDEOS ─────────────────────────────────────────── */}
+          <PropertyBrochure
+            brochureFile={propertyData?.brochureFile}
+            propertyName={propertyData?.propertyName}
+          />
+          <PropertyVideos
+            propertyVideo={propertyData?.propertyVideo}
+            videoLink={propertyData?.videoLink}
+            instagramReelLink={propertyData?.instagramReelLink}
+          />
 
           {/* ── SIMILAR PROPERTIES ────────────────────────────────────────── */}
           <View style={styles.sectionHeader}>

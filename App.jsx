@@ -17,13 +17,11 @@ import {GestureHandlerRootView} from 'react-native-gesture-handler';
 import {SafeAreaProvider} from 'react-native-safe-area-context';
 import VersionCheck from 'react-native-version-check';
 import {GoogleSignin} from '@react-native-google-signin/google-signin';
-import Geolocation from '@react-native-community/geolocation';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {store} from './src/app/store';
 import AppNavigator from './src/navigation/AppNavigator';
 import notifee from '@notifee/react-native';
 import {loadUser} from './src/features/auth/authSlice';
-import {setUserLocation} from './src/features/auth/authSlice'; // ← Add this action to authSlice
+import {startLiveLocation} from './src/services/liveLocation';
 import {Settings} from 'react-native-fbsdk-next';
 import messaging from '@react-native-firebase/messaging';
 import {navigationRef} from './src/navigation/Navigationref';
@@ -158,117 +156,15 @@ const Root = () => {
     }
   }, []);
 
-  // 📍 Request Location Permission (check first, ask only if not granted)
-  const requestLocationPermission = async () => {
-    try {
-      if (Platform.OS === 'android') {
-        const alreadyGranted = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        );
-
-        if (alreadyGranted) {
-          devLog('📍 Location permission already granted, skipping request.');
-          return true;
-        }
-
-        const result = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Permission',
-            message:
-              'This app needs access to your location to show nearby properties.',
-            buttonPositive: 'Allow',
-            buttonNegative: 'Deny',
-          },
-        );
-
-        devLog('📍 Location permission result:', result);
-        return result === PermissionsAndroid.RESULTS.GRANTED;
-      }
-      // iOS: handled automatically via Info.plist
-      return true;
-    } catch (error) {
-      devLog('Location permission error:', error);
-      return false;
-    }
-  };
-
-  // 🌍 Get user's city and state from coordinates
-  const getUserCityAndState = useCallback(async () => {
-    try {
-      const hasPermission = await requestLocationPermission();
-      if (!hasPermission) {
-        devLog('📍 Location permission denied, cannot fetch city/state');
-        return;
-      }
-
-      Geolocation.getCurrentPosition(
-        async position => {
-          const {latitude, longitude} = position.coords;
-          devLog('📍 Current position:', latitude, longitude);
-
-          // Reverse geocode to get city and state
-          const response = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`,
-            {
-              headers: {
-                'User-Agent': 'Reparv-App',
-              },
-            },
-          );
-
-          const data = await response.json();
-          devLog('🗺️ Geocoding response:', data);
-
-          const city =
-            data?.address?.city ||
-            data?.address?.town ||
-            data?.address?.village ||
-            data?.address?.suburb ||
-            '';
-          const state = data?.address?.state || '';
-
-          if (city && state) {
-            devLog('📍 User location:', {city, state});
-
-            // Store in AsyncStorage
-            try {
-              const raw = await AsyncStorage.getItem('Reparvuser');
-              if (raw) {
-                await AsyncStorage.setItem(
-                  'Reparvuser',
-                  JSON.stringify({...JSON.parse(raw), city, state}),
-                );
-              }
-            } catch (storageError) {
-              devLog('AsyncStorage error:', storageError);
-            }
-
-            // Dispatch to Redux
-            dispatch(setUserLocation({city, state}));
-          }
-        },
-        error => {
-          devLog('📍 Geolocation error:', error);
-        },
-        {
-          enableHighAccuracy: false,
-          timeout: 15000,
-          maximumAge: 10000,
-        },
-      );
-    } catch (error) {
-      devLog('getUserCityAndState error:', error);
-    }
-  }, [dispatch]);
-
   // App init
   useEffect(() => {
     logInfo('app_init_start');
     configureSocialLogin();
     dispatch(loadUser());
-    getUserCityAndState(); // ← Fetch city/state on app start
-  }, [dispatch, getUserCityAndState]);
+  }, [dispatch]);
+
+  // 📍 Live location for the whole app (city/state + coords stay current)
+  useEffect(() => startLiveLocation(dispatch), [dispatch]);
 
   useEffect(() => {
     const syncTuya = () =>
