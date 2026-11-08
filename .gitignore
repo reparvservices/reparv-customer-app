@@ -91,3 +91,6 @@ ios/build/
 # misc
 *.log
 .env
+
+# Release builds
+release/
