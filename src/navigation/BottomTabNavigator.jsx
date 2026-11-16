@@ -13,6 +13,7 @@ import {createBottomTabNavigator} from '@react-navigation/bottom-tabs';
 import HomeScreen from '../screens/HomeScreen';
 
 import ActivitiesScreen from '../screens/ActivitiesScreen';
+import FeedScreen from '../screens/FeedScreen';
 import CalculatorScreen from '../screens/CalculatorScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import HomeIcon from '../assets/image/bottom-navigator/home.png';
@@ -29,6 +30,7 @@ function CustomTabBar({state, navigation}) {
   const {width} = useWindowDimensions();
   const tabs = [
     {label: 'Home', icon: HomeIcon, route: 'Home'},
+    {label: 'Feed', icon: TrendsIcon, route: 'Feed'},
     {label: 'Activities', icon: ActivitiesIcon, route: 'Activities'},
     {label: 'Calculator', icon: CalculatorIcon, route: 'Calculator'},
     {label: 'Profile', icon: ProfileIcon, route: 'Profile'},
@@ -166,6 +168,7 @@ export default function BottomTabNavigator() {
       tabBar={props => <CustomTabBar {...props} />}>
       <Tab.Screen name="Home" component={HomeScreen} />
 
+      <Tab.Screen name="Feed" component={FeedScreen} />
       <Tab.Screen name="Activities" component={ActivitiesScreen} />
       <Tab.Screen name="Calculator" component={CalculatorScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

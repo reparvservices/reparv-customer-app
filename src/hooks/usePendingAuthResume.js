@@ -53,6 +53,9 @@ export default function usePendingAuthResume() {
       case AUTH_ACTION_TYPES.SELL_PROPERTY:
         navigate('OldProperty', params);
         break;
+      case AUTH_ACTION_TYPES.FEED:
+        navigate('MainTabs', {screen: 'Feed'});
+        break;
       case AUTH_ACTION_TYPES.PROFILE:
         navigate('MainTabs', {screen: 'Profile'});
         break;

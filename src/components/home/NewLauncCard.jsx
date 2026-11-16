@@ -13,7 +13,8 @@ import {useNavigation} from '@react-navigation/native';
 import {getImageUri, parseFrontView} from '../../utils/imageHandle';
 import {formatIndianAmount} from '../../utils/formatIndianAmount';
 
-const API_URL = 'https://aws-api.reparv.in/frontend/all-properties';
+import {API_BASE_URL} from '../../config/api';
+const API_URL = `${API_BASE_URL}/frontend/all-properties`;
 const LAUNCH_BANNER_ASPECT_RATIO = 16 / 9;
 
 export default function NewLaunchShowcase() {

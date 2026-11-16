@@ -94,3 +94,6 @@ ios/build/
 
 # Release builds
 release/
+
+# macOS metadata files created on external drives
+._*

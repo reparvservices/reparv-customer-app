@@ -25,6 +25,7 @@ import {getImageUri, parseFrontView} from '../../utils/imageHandle';
 import {devLog} from '../../utils/devLog';
 import {formatArea} from '../../utils/formatArea';
 
+import {API_BASE_URL} from '../../config/api';
 const PURPLE = '#6C3EF0';
 
 /* ─── Progress ring ─── */
@@ -438,7 +439,7 @@ export const ListingCard = ({propertyData, onDeleteSuccess}) => {
     if (!id) return;
     try {
       const res = await fetch(
-        `https://aws-api.reparv.in/customerapp/enquiry/getvisits?propertyid=${id}`,
+        `${API_BASE_URL}/customerapp/enquiry/getvisits?propertyid=${id}`,
       );
       const data = await res.json();
       if (res.ok && data) {
@@ -462,7 +463,7 @@ export const ListingCard = ({propertyData, onDeleteSuccess}) => {
     setIsDeleting(true);
     try {
       const response = await fetch(
-        `https://aws-api.reparv.in/customerapp/property/delete/${propertyData.propertyid}`,
+        `${API_BASE_URL}/customerapp/property/delete/${propertyData.propertyid}`,
         {method: 'DELETE'},
       );
       const data = await response.json();

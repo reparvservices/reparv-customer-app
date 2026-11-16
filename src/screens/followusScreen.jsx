@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import {SafeAreaView} from 'react-native-safe-area-context';
-import {ArrowLeft} from 'lucide-react-native';
+import {ArrowLeft, Newspaper, ChevronRight} from 'lucide-react-native';
 import {useNavigation} from '@react-navigation/native';
 import LinearGradient from 'react-native-linear-gradient';
 
@@ -208,7 +208,7 @@ export default function FollowUsScreen() {
           hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
           <ArrowLeft size={20} color="#1A1A2E" strokeWidth={2.2} />
         </TouchableOpacity>
-        <Text style={styles.topBarTitle}>Follow Us</Text>
+        <Text style={styles.topBarTitle}>Community</Text>
         <View style={{width: 40}} />
       </View>
 
@@ -251,19 +251,43 @@ export default function FollowUsScreen() {
                   </Text>
                 </View>
               </View>
-              <Text style={styles.heroHeading}>Stay Connected</Text>
+              <Text style={styles.heroHeading}>Join the Reparv Community</Text>
               <Text style={styles.heroSub}>
-                Follow us across platforms for exclusive deals,{'\n'}market
-                insights & real estate tips.
+                See updates from our partners in the app, and follow us{'\n'}
+                online for deals, market insights & tips.
               </Text>
             </View>
           </LinearGradient>
         </Animated.View>
 
+        {/* ── In the app ── */}
+        <View style={styles.sectionHead}>
+          <View style={styles.sectionAccent} />
+          <Text style={styles.sectionTitle}>In the app</Text>
+        </View>
+        <TouchableOpacity
+          activeOpacity={0.85}
+          style={styles.feedCard}
+          onPress={() => navigation.navigate('MainTabs', {screen: 'Feed'})}
+          accessibilityRole="button"
+          accessibilityLabel="Open the partner feed">
+          <View style={styles.feedIcon}>
+            <Newspaper size={22} color={BRAND} />
+          </View>
+          <View style={styles.feedText}>
+            <Text style={styles.feedTitle}>Partner Feed</Text>
+            <Text style={styles.feedDesc}>
+              Posts and updates from Reparv partners. Like and comment after you
+              log in.
+            </Text>
+          </View>
+          <ChevronRight size={20} color="#9CA3AF" />
+        </TouchableOpacity>
+
         {/* ── Section heading ── */}
         <View style={styles.sectionHead}>
           <View style={styles.sectionAccent} />
-          <Text style={styles.sectionTitle}>All Platforms</Text>
+          <Text style={styles.sectionTitle}>Follow us online</Text>
         </View>
 
         {/* ── Cards ── */}
@@ -286,6 +310,32 @@ export default function FollowUsScreen() {
 /* ─── Styles ───────────────────────────────────────────────────────────── */
 const styles = StyleSheet.create({
   root: {flex: 1, backgroundColor: '#F7F7FB'},
+
+  feedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    marginBottom: 8,
+    padding: 14,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    shadowOffset: {width: 0, height: 2},
+  },
+  feedIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: BRAND_LIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedText: {flex: 1, marginHorizontal: 12},
+  feedTitle: {fontSize: 15, fontWeight: '700', color: '#1A1A2E'},
+  feedDesc: {fontSize: 12, color: '#6B7280', marginTop: 2, lineHeight: 17},
 
   topBar: {
     height: 56,

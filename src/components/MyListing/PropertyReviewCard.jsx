@@ -34,6 +34,7 @@ import Svg, {Path, Circle} from 'react-native-svg';
 import {useNavigation, useRoute} from '@react-navigation/native';
 import {getCompletionInfo} from './ListingCard';
 
+import {API_BASE_URL} from '../../config/api';
 const PURPLE = '#6C3EF0';
 
 /* ─────────────────────────────────────────
@@ -288,7 +289,7 @@ const PropertyReviewScreen = () => {
     setIsDeleting(true);
     try {
       const res = await fetch(
-        `https://aws-api.reparv.in/customerapp/property/delete/${property.propertyid}`,
+        `${API_BASE_URL}/customerapp/property/delete/${property.propertyid}`,
         {method: 'DELETE'},
       );
       const data = await res.json();

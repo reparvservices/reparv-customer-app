@@ -19,9 +19,10 @@ import {ArrowLeft, Camera, ChevronDown} from 'lucide-react-native';
 import {launchImageLibrary, launchCamera} from 'react-native-image-picker';
 import {uploadToS3} from '../utils/uploadS3';
 
+import {API_BASE_URL} from '../config/api';
 const PURPLE = '#7C3AED';
 const BG = '#FAF8FF';
-const BASE_URL = 'https://aws-api.reparv.in'; // ✅ single source of truth
+const BASE_URL = API_BASE_URL; // ✅ single source of truth
 
 export default function UpdateProfileScreen({navigation, route}) {
   const {

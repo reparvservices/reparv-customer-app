@@ -32,8 +32,9 @@ import AllPropertyTypeSelector, {
   allTypeHidesBhk,
 } from '../components/propertyUpdate/AllTypeProperty';
 
+import {API_BASE_URL} from '../config/api';
 // ─── API Base URL ─────────────────────────────────────────────────────────────
-const API_BASE_URL = 'https://aws-api.reparv.in';
+
 
 // ─── Geocode cache ────────────────────────────────────────────────────────────
 const geoCache = {};

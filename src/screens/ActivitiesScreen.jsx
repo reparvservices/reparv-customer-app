@@ -33,7 +33,7 @@ import {useFocusEffect, useNavigation} from '@react-navigation/native';
 import ActivityCard from '../components/activities/ActivityCard';
 
 const {width} = Dimensions.get('window');
-const BASE_URL = 'https://aws-api.reparv.in/customerapp';
+const BASE_URL = `${API_BASE_URL}/customerapp`;
 
 const TABS = [
   {key: 'wishlist', label: 'Wishlist', icon: WishlistIcon, type: 'fill'},
