@@ -27,7 +27,7 @@ function VenueCard({item, onPress}) {
         <Text style={styles.cardTitle} numberOfLines={1}>{item.title}</Text>
         <View style={styles.row}>
           <MapPin size={14} color="#6B7280" />
-          <Text style={styles.meta}> {item.city} · {item.type}</Text>
+          <Text style={styles.meta}> {item.city} · {item.type_label || item.type}</Text>
         </View>
         <View style={styles.row}>
           <Users size={14} color="#6B7280" />
