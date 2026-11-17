@@ -10,6 +10,7 @@ export const AUTH_ACTION_TYPES = {
   ACTIVITIES: 'activities',
   PROFILE: 'profile',
   FEED: 'feed',
+  VENUE: 'venue',
 };
 
 export function isLoggedIn(auth) {

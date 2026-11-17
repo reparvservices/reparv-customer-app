@@ -45,6 +45,9 @@ import SimilerPropertyDetailsScreen from '../screens/SimilerPropertyDetailsScree
 import CityPropertyMapScreen from '../screens/Citypropertymapscreen';
 import ComingSoonScreen from '../components/home/ComingSoonScreen';
 import FollowUsScreen from '../screens/followusScreen';
+import VenuesScreen from '../screens/VenuesScreen';
+import VenueDetailScreen from '../screens/VenueDetailScreen';
+import MyVenueBookingsScreen from '../screens/MyVenueBookingsScreen';
 import PropertyReviewScreen from '../components/MyListing/PropertyReviewCard';
 import usePendingAuthResume from '../hooks/usePendingAuthResume';
 import {getFocusedRouteName} from './navigationState';
@@ -128,6 +131,9 @@ function registerBrowseScreens(StackNavigator) {
         component={TermsPrivacyScreen}
       />
       <StackNavigator.Screen name="FollowUs" component={FollowUsScreen} />
+      <StackNavigator.Screen name="Venues" component={VenuesScreen} />
+      <StackNavigator.Screen name="VenueDetail" component={VenueDetailScreen} />
+      <StackNavigator.Screen name="MyVenueBookings" component={MyVenueBookingsScreen} />
       <StackNavigator.Screen
         name="PropertyReview"
         component={PropertyReviewScreen}

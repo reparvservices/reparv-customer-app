@@ -393,6 +393,12 @@ export default function ProfileScreen() {
             navigation={navigation}
           />
           <MenuItem
+            label="Stays & Venues"
+            image={require('../assets/image/Profile/help.png')}
+            page="Venues"
+            navigation={navigation}
+          />
+          <MenuItem
             label="Community"
             image={require('../assets/image/Profile/insta.png')}
             page="FollowUs"

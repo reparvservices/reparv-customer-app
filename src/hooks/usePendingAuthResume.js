@@ -56,6 +56,9 @@ export default function usePendingAuthResume() {
       case AUTH_ACTION_TYPES.FEED:
         navigate('MainTabs', {screen: 'Feed'});
         break;
+      case AUTH_ACTION_TYPES.VENUE:
+        navigate(params.id ? 'VenueDetail' : 'MyVenueBookings', params.id ? {id: params.id} : undefined);
+        break;
       case AUTH_ACTION_TYPES.PROFILE:
         navigate('MainTabs', {screen: 'Profile'});
         break;
